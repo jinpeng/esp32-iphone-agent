@@ -64,6 +64,7 @@ extension ScreenSource {
     private(set) var broken = false
     private var clockOffset: Double?  // local s − board s, the smallest seen (≈ the link latency)
     var mirroring = false  // board status says ap == streaming
+    var frozen = false     // board status says fz: the GOP froze at its cap and frames are stale
     var metrics: Metrics?
     weak var device: HIDDevice?
 
@@ -82,7 +83,7 @@ extension ScreenSource {
         }
     }
 
-    var live: Bool { mirroring && frame != nil && (device?.connected ?? false) }
+    var live: Bool { mirroring && !frozen && frame != nil && (device?.connected ?? false) }
 
     /// Frame width / height (portrait iPhone as a fallback).
     var aspect: Double { size.width > 0 && size.height > 0 ? size.width / size.height : 9 / 19.5 }

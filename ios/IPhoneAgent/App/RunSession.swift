@@ -64,6 +64,7 @@ extension AppModel {
                 self?.endBackgroundTask()
             }
             let left = now()
+            try await wakeMirrorIfFrozen()  // while we are still on screen: our own flash is mirrored
             var away = await leaveApp()
             if !away { away = await askUserToLeave() }
             guard away else {  // never let the agent start on its own app
@@ -75,7 +76,7 @@ extension AppModel {
                 await feed.settled()
                 mark(changed ? "screen changed and settled" : "no screen change seen in 3 s; settled")
             }
-            mark("first frame: " + (try await feed.currentFrame()))
+            mark("first frame: " + (try await firstFrameWithRecovery()))
             try agent.start(task, traceStarted: true)
             mark("agent started")
             say("started: \(task)")
@@ -95,6 +96,44 @@ extension AppModel {
                           body: error.localizedDescription, run: runID)
             openReview(run: runID)
         }
+    }
+
+    /// The board froze its GOP at the byte cap and AirPlay sends keyframes only on scene changes: while
+    /// this app is still on screen (its output is mirrored), a fullscreen flash is a scene cut that makes
+    /// the encoder send a fresh IDR, unfreezing the board without asking the user to toggle mirroring.
+    private func wakeMirrorIfFrozen() async throws {
+        guard board.status?.fz == 1, board.status?.ap == "streaming" else { return }
+        say(String(localized: "Waking Screen Mirroring…"))
+        for _ in 0..<3 where board.status?.fz == 1 {
+            mirrorWake = true
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            mirrorWake = false
+            try? await Task.sleep(nanoseconds: 1_200_000_000)  // the IDR lands and the 1 s status refreshes
+        }
+        guard board.status?.fz == 1 else { return }
+        throw DeviceError(message: String(localized: "Screen Mirroring is stalled (the board serves an old frame). In Control Center, turn Screen Mirroring off and on (choose the board), then start the task again."))
+    }
+
+    /// The board can be blind to a healthy mirroring stream: once its GOP buffer fills it drops everything
+    /// and AirPlay has no periodic keyframes, so `snap` fails until a scene change or a mirroring restart.
+    /// Retry for a while (a scene change may bring the keyframe), then fail with instructions.
+    private func firstFrameWithRecovery() async throws -> String {
+        if board.status?.fz == 1, board.status?.ap == "streaming" {
+            // The board is serving a stale frame window (its buffer froze at the byte cap and AirPlay
+            // has not sent a keyframe since): starting on an old screen is worse than asking up front.
+            throw DeviceError(message: String(localized: "Screen Mirroring is stalled (the board serves an old frame). In Control Center, turn Screen Mirroring off and on (choose the board), then start the task again."))
+        }
+        var last: Error = DeviceError(message: "no video")
+        for _ in 0..<5 {
+            do { return try await feed.currentFrame() }
+            catch {
+                last = error
+                guard board.status?.ap == "streaming", error.localizedDescription.contains("no video") else { throw error }
+                say(String(localized: "Screen mirroring is on, but the board is waiting for a video keyframe. Waiting a moment… (if this keeps failing: Control Center → Screen Mirroring → off, then on again)"))
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+            }
+        }
+        throw DeviceError(message: String(localized: "The board still sees no video. Turn Screen Mirroring off and on in Control Center (choose the board), then start the task again."))
     }
 
     /// Emergency stop: cancel the agent and release the mouse button.

@@ -29,6 +29,9 @@ struct BoardStatus: Codable, Equatable {
     var ap: String?    // idle | connected | streaming
     var w: Int?, h: Int?
     var kbps: Double?, fps: Double?, idr: Int?, gop: Int?
+    var ovf: Int?     // times a cap was hit; the board then serves a stale frame window
+    var vw: Int?      // 1: nothing decodable yet (no IDR since boot/mirror start)
+    var fz: Int?      // 1: the board serves a stale frame window (frozen; needs a scene change or mirror restart)
     var ble: BLE?
 
     static func decode(_ data: Data) -> BoardStatus? { try? JSONDecoder().decode(BoardStatus.self, from: data) }
@@ -40,7 +43,7 @@ struct BoardStatus: Codable, Equatable {
         m.up = n.up ?? up; m.rst = n.rst ?? rst; m.heap = n.heap ?? heap; m.psram = n.psram ?? psram
         m.usb = n.usb ?? usb; m.net = n.net ?? net; m.ip = n.ip ?? ip; m.sta = n.sta ?? sta; m.ap = n.ap ?? ap
         m.w = n.w ?? w; m.h = n.h ?? h; m.kbps = n.kbps ?? kbps; m.fps = n.fps ?? fps; m.idr = n.idr ?? idr
-        m.gop = n.gop ?? gop
+        m.gop = n.gop ?? gop; m.ovf = n.ovf ?? ovf; m.vw = n.vw ?? vw; m.fz = n.fz ?? fz
         let a = ble ?? BLE(), b = n.ble ?? BLE()
         m.ble = BLE(mtu: b.mtu ?? a.mtu, phy: b.phy ?? a.phy, kbps: b.kbps ?? a.kbps, drop: b.drop ?? a.drop)
         return m

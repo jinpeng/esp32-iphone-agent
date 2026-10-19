@@ -49,6 +49,7 @@ import UIKit
     var recoverySince = Date()
     @Published var takingOver = false
     @Published var departing = false  // the character's take-off before a run
+    @Published var mirrorWake = false  // fullscreen flash: force an AirPlay keyframe when the board's GOP froze
     @Published var startingAgent = false
     /// A banner on Home: the app could not leave by itself (swipe up), or the run waits while the app is in front.
     @Published var homeHint: String?
@@ -110,6 +111,7 @@ import UIKit
         board.onStatus = { [weak self] s in
             self?.statusRefreshError = nil
             self?.feed.mirroring = s.ap == "streaming"
+            self?.feed.frozen = s.fz == 1  // the board serves a stale window: treat the screen as gone
             if let up = s.up { self?.feed.boardClock(ms: up) }
             self?.metrics.status(s)
             self?.logStatus(s)

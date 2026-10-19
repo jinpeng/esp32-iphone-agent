@@ -81,6 +81,7 @@ struct HomeView: View {
                 Text("I'll tell you when a run is done or needs your help, since you won't see this app while I work.")
             }
             .overlay { if app.departing { DepartureOverlay() } }
+            .overlay { if app.mirrorWake { Color.black.ignoresSafeArea() } }
             .overlay(alignment: .top) {
                 if let hint = app.homeHint {
                     Label { Text(verbatim: hint) } icon: { Image(systemName: "arrow.up.to.line") }
