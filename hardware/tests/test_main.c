@@ -93,9 +93,9 @@ static void test_gop(void) {
   CHECK(gop_push(&g, au, 30, true, 2) == 0);
   CHECK(gop_push(&g, au, 30, false, 3) == 1);
   CHECK(gop_push(&g, au, 30, false, 4) == 2 && g.used == 90);
-  CHECK(gop_push(&g, au, 30, false, 5) == -1 && g.n == 0 && g.wait_idr && g.overflows == 1);
-  CHECK(gop_push(&g, au, 10, false, 6) == -1);
-  CHECK(gop_push(&g, au, 10, true, 7) == 0 && !g.wait_idr);
+  CHECK(gop_push(&g, au, 30, false, 5) == -1 && g.n == 3 && !g.wait_idr && g.frozen && g.overflows == 1);
+  CHECK(gop_push(&g, au, 10, false, 6) == -1 && g.n == 3);  // frozen: keep serving the buffered window
+  CHECK(gop_push(&g, au, 10, true, 7) == 0 && !g.wait_idr && !g.frozen && g.n == 1);  // an IDR restarts
 
   uint8_t idr[] = {0, 0, 0, 1, 0x67, 1, 0, 0, 0, 1, 0x65, 9};
   CHECK(annexb_has_idr(idr, sizeof idr));

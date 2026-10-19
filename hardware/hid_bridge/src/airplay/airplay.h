@@ -34,6 +34,10 @@ bool airplay_start(const airplay_cfg *cfg);
 int airplay_state(void);  // AIRPLAY_IDLE / _CONNECTED / _STREAMING
 // Display advertised in /info from the next mirroring session on.
 void airplay_set_display(uint16_t width, uint16_t height, uint8_t max_fps);
+// Drop the mirror data connection without touching the RTSP session: iOS either reconnects it
+// (and restarts with a fresh IDR, which the GOP buffer needs to recover from an overflow) or
+// ends the session. Used to escape the no-periodic-IDR blindness.
+void ap_mirror_resync(void);
 
 #ifdef __cplusplus
 }

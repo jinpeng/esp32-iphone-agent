@@ -4,10 +4,12 @@
 #include "ble_link.h"
 #include "src/video/gop.h"
 
-// GOP since the latest IDR; overflow drops it until the next IDR. A still screen gets an IDR only every
-// few minutes, so room for ~27 min of AUs at 5 fps (P-frames of a still screen are tiny).
-const size_t GOP_CAP = 4 * 1024 * 1024;
-const int MAX_AUS = 8192;
+// GOP since the latest IDR. The cap bounds the worst-case catch-up — a snap, a stream restart and the
+// phone's decoder replay all transfer this much — to seconds over BLE. When it fills, the buffer freezes
+// (serves its window, drops new AUs) until an IDR restarts it: going "blind" instead would need an IDR to
+// recover, and AirPlay sends IDRs only at stream start / scene changes, not periodically.
+const size_t GOP_CAP = 1024 * 1024;
+const int MAX_AUS = 32768;
 const size_t SCRATCH_CAP = 512 * 1024;   // largest access unit we forward
 const size_t MAX_CHUNK = 512;
 
@@ -196,7 +198,8 @@ void video_bench(const String &id, uint32_t kb) { request(id, true, kb); }
 VideoStats video_stats() {
   bool fresh = millis() - statAt < 3000;  // mirroring stopped: report zeros, not stale numbers
   xSemaphoreTake(lock, portMAX_DELAY);
-  uint32_t gopBytes = gop.used;
+  uint32_t gopBytes = gop.used, ovf = gop.overflows;
+  bool waiting = gop.wait_idr, frozen = gop.frozen;
   xSemaphoreGive(lock);
-  return {fresh ? statKbps : 0, statIdrMs, gopBytes, fresh ? statFps : 0};
+  return {fresh ? statKbps : 0, statIdrMs, gopBytes, ovf, waiting, frozen, fresh ? statFps : 0.f};
 }

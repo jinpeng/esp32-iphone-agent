@@ -26,6 +26,7 @@
 
 static struct {
   volatile bool run, done;
+  volatile bool resync_req;
   volatile int64_t last_data_us;
   mbedtls_aes_context aes;
   uint8_t iv[16], stream[16];
@@ -100,6 +101,10 @@ static void mirror_task(void *arg) {
   bool in_payload = false;
   int64_t next_ntp = 0;
   while (m.run) {
+    if (m.resync_req) {
+      m.resync_req = false;
+      if (m.sfd >= 0) { ap_log("mirror: resync: dropping the data connection"); close_fd(&m.sfd); }
+    }
     if (m.timing_rport && now_ms() >= next_ntp) {
       send_ntp(ntp);
       next_ntp = now_ms() + NTP_INTERVAL_MS;
@@ -205,6 +210,8 @@ void ap_mirror_stop(void) {
 }
 
 bool ap_mirror_running(void) { return m.run; }
+
+void ap_mirror_resync(void) { m.resync_req = true; }
 
 bool ap_mirror_streaming(void) {
   return m.run && m.last_data_us && esp_timer_get_time() - m.last_data_us < 3000000;

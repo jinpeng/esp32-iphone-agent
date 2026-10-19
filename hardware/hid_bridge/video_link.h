@@ -12,6 +12,9 @@ void video_bench(const String &id, uint32_t kb);  // replies "<id> ok <ms>"
 
 struct VideoStats {
   uint32_t kbps, idr_ms, gop_bytes;
+  uint32_t overflows;  // times a cap was hit; the buffer then freezes until the next IDR
+  bool wait_idr;       // no IDR yet (nothing decodable)
+  bool frozen;         // serving a stale window until an IDR restarts the buffer
   float fps;
 };
 VideoStats video_stats();

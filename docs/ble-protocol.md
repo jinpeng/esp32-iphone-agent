@@ -26,6 +26,9 @@ New:
 - `res W H` — AirPlay resolution advertised in `/info` (default 480 1040), stored in NVS; takes effect on the next mirroring session.
 - `fps N` — max fps advertised (default 5), stored in NVS.
 - `bench KB` — send KB kilobytes of filler on `video` with the `bench` flag, then reply `ok <ms>`.
+- `resync` — drop the mirror data connection (the RTSP session stays up). iOS does not resume it by
+  itself: `ap` turns `connected` until the user toggles Screen Mirroring, which restarts the stream with
+  a fresh IDR. The firmware issues this itself when the GOP buffer overflows and stays blind (see `vw`).
 - `unpair` — erase all bonds and restart advertising.
 - `coex [bt|balance|wifi]` — Wi-Fi/BLE radio-share preference (A/B knob, not stored; every boot starts at
   `balance`). Replies `ok <current>`; bare `coex` just reports it.
@@ -35,10 +38,15 @@ When the link drops, the board releases all buttons/keys (same as before).
 ```json
 {"up":123456,"rst":"power-on","heap":81234,"psram":6200000,"usb":"ok|asleep|off",
  "net":"ap|sta|none","ip":"192.168.4.1","sta":1,
- "ap":"idle|connected|streaming","w":480,"h":1040,"kbps":180,"fps":4.8,"idr":2000,"gop":42000,
+ "ap":"idle|connected|streaming","w":480,"h":1040,"kbps":180,"fps":4.8,"idr":2000,"gop":42000,"ovf":0,"vw":0,
  "ble":{"mtu":247,"phy":2,"kbps":350,"drop":0,"rdrop":0,"n":1}}
 ```
 `kbps` = AirPlay video bitrate in, `ble.kbps` = video bytes out over BLE, `idr` = ms between IDRs, `gop` = bytes buffered since last IDR.
+`ovf` = times the GOP hit a cap and was dropped; `vw` = 1 while the board waits for an IDR ("video wait"):
+AirPlay sends keyframes only at stream start / scene changes, so after an overflow `vw` can stay 1 for a long
+time even though `ap` says `streaming` and `kbps` looks healthy. ~5 s of blindness makes the firmware drop
+the mirror data connection (see `resync`), turning `ap` to `connected` so the app can prompt for a mirroring
+restart. `gop` = 0 together with fresh `kbps`/`fps` is the same signal.
 `rst` = reset reason of the current boot (`power-on|brownout|watchdog|crash|software|usb|other`), `up` = ms since boot.
 `ble.drop` = video notifies given up, `ble.rdrop` = replies that never reached a subscribed peer (should stay 0),
 `ble.n` = connected centrals.
@@ -66,7 +74,7 @@ Receiver name `ESP32 Agent`, mirroring only (no audio), H.264 only, resolution/f
 
 ## Deviations (firmware notes)
 - `status`: if the negotiated MTU is too small for the full JSON (MTU-3 < ~255 bytes), the notify carries a
-  reduced object `{"up","rst","usb","net","ap","ble":{"mtu"}}`; a `status` read always returns the last full JSON.
+  reduced object `{"up","rst","usb","net","ap","gop","ovf","vw","ble":{"mtu"}}`; a `status` read always returns the last full JSON.
 - `sta` in `status` = number of stations on the board's hotspot (mode `ap`), or 1/0 = connected (mode `sta`).
 - `net` read in `sta` mode returns the station network's `ssid`/`pass`.
 - `snap` while mirroring has stopped returns the last buffered GOP (check `"ap"` in status); `snap` without

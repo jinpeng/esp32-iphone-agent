@@ -33,7 +33,12 @@ arduino-cli compile -b "$FQBN" "${FLAGS[@]}" --output-dir build hid_bridge
 PORT=${PORT:-$(port)}
 OLD=$PORT
 stty -f "$PORT" 1200 2>/dev/null || stty -F "$PORT" 1200 2>/dev/null || true
+( exec 9<>"$PORT" ) 2>/dev/null || true  # opening pushes the 1200-baud line coding; stty alone may not
 for _ in $(seq 20); do sleep 0.5; PORT=$(port); [[ -n "$PORT" && "$PORT" != "$OLD" ]] && break; done
+if [[ -z "$(port)" ]]; then
+  echo "the board did not re-enumerate; enter download mode manually (hold BOOT, re-plug USB, release after 1 s) and re-run" >&2
+  exit 1
+fi
 sleep 1  # let the ROM bootloader's serial come up
 PORT=$(port)
 arduino-cli upload -b "$FQBN" -p "$PORT" --input-dir build hid_bridge

@@ -27,14 +27,17 @@ typedef struct {
   uint8_t cfg[GOP_CFG_MAX];  // SPS+PPS, Annex-B
   size_t cfg_len;
   uint32_t cfg_ts;
-  bool wait_idr;    // overflow or start: drop until the next IDR
+  bool wait_idr;    // start: drop until the first IDR
   uint32_t gen;     // bumps whenever the buffer restarts
-  uint32_t overflows;
+  uint32_t overflows;  // times a cap was hit (the buffer then freezes, see gop_push)
+  bool frozen;      // cap reached: serve the buffered window as-is (stale) until an IDR restarts it
 } gop_buf;
 
 void gop_init(gop_buf *g, uint8_t *arena, size_t cap, gop_au *aus, int max);
 void gop_set_config(gop_buf *g, const uint8_t *annexb, size_t len, uint32_t ts);
-// Appends one Annex-B access unit. Returns its index, or -1 if it was dropped.
+// Appends one Annex-B access unit. Returns its index, or -1 if it was dropped (before the first IDR,
+// or while frozen: a cap is reached and P-frames cannot be dropped mid-GOP, so the buffer keeps
+// serving what it holds — stale but decodable — until an IDR restarts it).
 int gop_push(gop_buf *g, const uint8_t *annexb, size_t len, bool idr, uint32_t ts);
 // True if the Annex-B data contains an IDR slice (NAL type 5).
 bool annexb_has_idr(const uint8_t *p, size_t len);

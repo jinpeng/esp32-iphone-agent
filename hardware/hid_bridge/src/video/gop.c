@@ -10,7 +10,6 @@ void gop_init(gop_buf *g, uint8_t *arena, size_t cap, gop_au *aus, int max) {
   g->max = max;
   g->wait_idr = true;
 }
-
 void gop_set_config(gop_buf *g, const uint8_t *annexb, size_t len, uint32_t ts) {
   if (len > GOP_CFG_MAX) len = 0;  // never seen in practice; treat as missing
   memcpy(g->cfg, annexb, len);
@@ -21,6 +20,7 @@ void gop_set_config(gop_buf *g, const uint8_t *annexb, size_t len, uint32_t ts) 
 static void restart(gop_buf *g) {
   g->used = 0;
   g->n = 0;
+  g->frozen = false;
   g->gen++;
 }
 
@@ -30,10 +30,11 @@ int gop_push(gop_buf *g, const uint8_t *annexb, size_t len, bool idr, uint32_t t
     g->wait_idr = false;
   } else if (g->wait_idr) {
     return -1;
+  } else if (g->frozen) {
+    return -1;  // serve the buffered window as-is; an IDR will restart us
   }
-  if (g->used + len > g->cap || g->n == g->max) {  // GOP too big: drop it and wait for the next IDR
-    restart(g);
-    g->wait_idr = true;
+  if (g->used + len > g->cap || g->n == g->max) {  // GOP too big: freeze instead of dropping it
+    g->frozen = true;
     g->overflows++;
     return -1;
   }
